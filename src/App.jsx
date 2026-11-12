@@ -1,11 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+import CrmCloud from "./CrmCloud.jsx";
 import { Search, Upload, ClipboardList, Mail, CheckCircle2, Clock3, DollarSign, CalendarDays, Plus, Pencil, Trash2, X, ChevronLeft, ChevronRight, AlertCircle, Undo2, Download } from "lucide-react";
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
-const SUPABASE_STATE_ID = import.meta.env.VITE_SUPABASE_STATE_ID || "eason-lead-tracker-main";
-const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 const STORAGE_KEY = "eason-lead-tracker-v2";
 const OLD_KEYS = ["eason-lead-tracker-v1", "eason-lead-tracker-v3"];
@@ -904,13 +899,6 @@ export default function App(){
       return initialLeads;
     }catch{return initialLeads}
   });
-  const [cloudReady,setCloudReady]=useState(!supabase);
-  const [cloudStatus,setCloudStatus]=useState(supabase?"連線準備中":"未連接雲端");
-  const [cloudMessage,setCloudMessage]=useState(supabase?"正在讀取 Supabase 雲端資料…":"尚未設定 Supabase 環境變數，暫時只使用本機備份。設定後才會啟用雲端同步。");
-  const [cloudLastSavedAt,setCloudLastSavedAt]=useState("");
-  const [cloudSaving,setCloudSaving]=useState(false);
-  const cloudSaveTimerRef=useRef(null);
-  const cloudLoadingRef=useRef(false);
   const [query,setQuery]=useState("");
   const [searchInput,setSearchInput]=useState("");
   const [status,setStatus]=useState("全部");
@@ -1017,92 +1005,13 @@ export default function App(){
   },[leads]);
 
   useEffect(()=>{
-    if(!supabase){
-      setCloudReady(true);
-      return;
-    }
-    let cancelled=false;
-    async function loadCloudState(){
-      cloudLoadingRef.current=true;
-      setCloudStatus("雲端讀取中");
-      setCloudMessage("正在從 Supabase 讀取 CRM 資料…");
-      try{
-        const {data,error}=await supabase
-          .from("crm_state")
-          .select("id, leads, updated_at")
-          .eq("id", SUPABASE_STATE_ID)
-          .maybeSingle();
-        if(error) throw error;
-        if(cancelled) return;
-        if(data?.leads && Array.isArray(data.leads)){
-          setLeads(data.leads);
-          setCloudStatus("雲端已連線");
-          setCloudMessage(`已載入 Supabase 雲端資料，共 ${data.leads.length} 筆。`);
-          setCloudLastSavedAt(data.updated_at ? new Date(data.updated_at).toLocaleString("zh-TW") : "");
-        }else{
-          const {error:upsertError}=await supabase
-            .from("crm_state")
-            .upsert({id:SUPABASE_STATE_ID, leads, updated_at:new Date().toISOString()},{onConflict:"id"});
-          if(upsertError) throw upsertError;
-          setCloudStatus("雲端已建立");
-          setCloudMessage(`Supabase 尚無資料，已用目前本機資料建立雲端版本，共 ${leads.length} 筆。`);
-          setCloudLastSavedAt(new Date().toLocaleString("zh-TW"));
-        }
-      }catch(err){
-        console.error("Cloud load failed", err);
-        if(!cancelled){
-          setCloudStatus("雲端錯誤");
-          setCloudMessage(`讀取 Supabase 失敗：${err.message || String(err)}。目前畫面仍會使用本機備份，先不要大量改資料。`);
-        }
-      }finally{
-        cloudLoadingRef.current=false;
-        if(!cancelled) setCloudReady(true);
-      }
-    }
-    loadCloudState();
-    return ()=>{cancelled=true;};
-    // 初次載入雲端資料，只跑一次。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[]);
-
-  useEffect(()=>{
-    if(!supabase || !cloudReady || cloudLoadingRef.current) return;
-    if(cloudSaveTimerRef.current) clearTimeout(cloudSaveTimerRef.current);
-    setCloudSaving(true);
-    setCloudStatus("雲端同步中");
-    cloudSaveTimerRef.current=setTimeout(async()=>{
-      try{
-        const savedAt=new Date().toISOString();
-        const {error}=await supabase
-          .from("crm_state")
-          .upsert({id:SUPABASE_STATE_ID, leads, updated_at:savedAt},{onConflict:"id"});
-        if(error) throw error;
-        setCloudStatus("雲端已同步");
-        setCloudMessage(`已同步到 Supabase，共 ${leads.length} 筆。`);
-        setCloudLastSavedAt(new Date(savedAt).toLocaleString("zh-TW"));
-      }catch(err){
-        console.error("Cloud save failed", err);
-        setCloudStatus("雲端儲存失敗");
-        setCloudMessage(`儲存到 Supabase 失敗：${err.message || String(err)}。本機備份仍會保留，但請先不要關閉視窗。`);
-      }finally{
-        setCloudSaving(false);
-      }
-    },700);
-    return ()=>{
-      if(cloudSaveTimerRef.current) clearTimeout(cloudSaveTimerRef.current);
-    };
-  },[leads,cloudReady]);
-
-  useEffect(()=>{
-    if(!cloudReady) return;
     const {changed,next}=autoMoveUnfinishedOverdueItems(leads,today());
     if(changed){
       setLeads(next);
       setLastAction("已自動把逾期未完成事項移到今天");
     }
-    // 雲端資料載入後跑一次，避免每天進來看到過期待辦還卡在昨天。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[cloudReady]);
+  },[]);
 
   useEffect(()=>{
     if(calMonth === monthStr(today())) scrollToCalendarDate(today(), "auto");
@@ -1705,7 +1614,7 @@ export default function App(){
   return <div className="min-h-screen bg-[linear-gradient(135deg,#f8fafc_0%,#eef4ff_45%,#e8edf7_100%)] text-slate-900"><div className="mx-auto max-w-7xl px-5 py-8">
     <header className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between"><div><div className="mb-3 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-700"><ClipboardList className="h-4 w-4"/>Eason Lead Tracker</div><h1 className="text-4xl font-bold tracking-tight text-slate-950 md:text-5xl">潛在客戶追蹤系統</h1><p className="mt-3 max-w-2xl leading-7 text-slate-600">管理客戶業務理解、主推產品、痛點證據、付費理由、信服力來源、商機等級、寄信追蹤與下一步承諾。</p></div><div className="flex flex-wrap gap-3"><button onClick={()=>setBulk(true)} className="inline-flex items-center gap-2 rounded-2xl border border-blue-200 bg-white px-5 py-3 text-blue-700 shadow-sm hover:bg-blue-50"><Upload className="h-4 w-4"/>批量貼上</button><button onClick={exportOutreachSummary} className="inline-flex items-center gap-2 rounded-2xl border border-emerald-200 bg-white px-5 py-3 text-emerald-700 shadow-sm hover:bg-emerald-50"><Download className="h-4 w-4"/>匯出名單追蹤總表</button><button onClick={()=>setShowLeadsAll(v=>!v)} className={`inline-flex items-center gap-2 rounded-2xl border px-5 py-3 shadow-sm ${showLeadsAll?"border-blue-500 bg-blue-50 text-blue-700":"border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}><ClipboardList className="h-4 w-4"/>{showLeadsAll?"隱藏名單一覽":"名單一覽"}</button><button onClick={()=>setShowPrepAll(v=>!v)} className={`inline-flex items-center gap-2 rounded-2xl border px-5 py-3 shadow-sm ${showPrepAll?"border-slate-500 bg-slate-100 text-slate-700":"border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}><CalendarDays className="h-4 w-4"/>{showPrepAll?"隱藏準備事項":"準備事項一覽"}</button><button onClick={()=>setShowQuotedPlans(v=>!v)} className={`inline-flex items-center gap-2 rounded-2xl border px-5 py-3 shadow-sm ${showQuotedPlans?"border-emerald-500 bg-emerald-50 text-emerald-700":"border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}><DollarSign className="h-4 w-4"/>{showQuotedPlans?"隱藏報價/合約分類":"報價/合約方案分類"}</button></div></header>
 
-    <section className={`mt-6 rounded-3xl border p-4 shadow-sm ${supabase?"border-emerald-200 bg-emerald-50":"border-amber-200 bg-amber-50"}`}><div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between"><div><p className={`text-sm font-bold ${supabase?"text-emerald-800":"text-amber-800"}`}>{cloudSaving?"雲端同步中":cloudStatus}</p><p className="mt-1 text-sm leading-6 text-slate-600">{cloudMessage}</p>{cloudLastSavedAt&&<p className="mt-1 text-xs text-slate-500">最後同步：{cloudLastSavedAt}</p>}</div><div className="rounded-2xl bg-white px-4 py-2 text-xs font-semibold text-slate-600 shadow-sm">資料來源：{supabase?"Supabase 雲端 + 本機備份":"本機備份模式"}</div></div></section>
+    <CrmCloud leads={leads} setLeads={setLeads}/>
 
     <section className="mt-8 grid gap-4 md:grid-cols-4 xl:grid-cols-5"><Stat icon={ClipboardList} label="客戶名單總數" value={stats.total}/><Stat icon={Clock3} label="未寄" value={stats.unsentCount} active={activeStatKey==="unsent"} onClick={()=>setActiveStatKey(activeStatKey==="unsent"?"":"unsent")}/><Stat icon={Mail} label="已寄" value={stats.sentCount} active={activeStatKey==="sent"} onClick={()=>setActiveStatKey(activeStatKey==="sent"?"":"sent")}/><Stat icon={Mail} label="已補追" value={stats.actualFollowUpCount} active={activeStatKey==="actualFollowUp"} onClick={()=>setActiveStatKey(activeStatKey==="actualFollowUp"?"":"actualFollowUp")}/><Stat icon={CheckCircle2} label="有回覆" value={stats.replied} active={activeStatKey==="replied"} onClick={()=>setActiveStatKey(activeStatKey==="replied"?"":"replied")}/><Stat icon={Clock3} label="真商機" value={stats.activeOpportunity} active={activeStatKey==="active"} onClick={()=>setActiveStatKey(activeStatKey==="active"?"":"active")}/><Stat icon={AlertCircle} label="無需求/未成交" value={stats.rejected} active={activeStatKey==="rejected"} onClick={()=>setActiveStatKey(activeStatKey==="rejected"?"":"rejected")}/><Stat icon={DollarSign} label="有預計收益案源" value={stats.estimatedCount} active={activeStatKey==="estimated"} onClick={()=>setActiveStatKey(activeStatKey==="estimated"?"":"estimated")}/><Stat icon={DollarSign} label="預計收益總累積" value={money(stats.projected)}/><Stat icon={DollarSign} label="目前總收益" value={money(stats.actual)}/></section>
 
