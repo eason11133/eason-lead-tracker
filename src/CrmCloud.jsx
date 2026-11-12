@@ -7,6 +7,18 @@ const stateId = import.meta.env.VITE_SUPABASE_STATE_ID || "eason-lead-tracker-ma
 const ownerEmail = "easonlsy1019@gmail.com";
 const supabase = url && key ? createClient(url, key) : null;
 
+// JSONB may reorder object keys, so compare the full contents instead of raw JSON strings.
+// Count-only comparison would miss edited customer records.
+const canonical = (value) => {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]));
+  }
+  return value;
+};
+const sameLeads = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+
+
 export default function CrmCloud({ leads, setLeads }) {
   const [user, setUser] = useState(null);
   const [emailSent, setEmailSent] = useState(false);
@@ -58,7 +70,17 @@ export default function CrmCloud({ leads, setLeads }) {
       setRemote(data);
       remoteUpdatedRef.current = data.updated_at;
       remoteCountRef.current = data.leads.length;
-      setMessage(`已讀到雲端 ${data.leads.length} 筆。本機 ${currentLeadsRef.current.length} 筆；請選擇同步來源。`);
+
+      if (sameLeads(data.leads, currentLeadsRef.current)) {
+        // Safe auto-resume: both sources contain the same records and fields.
+        // No upload/download happens during initialization.
+        lastSavedPayloadRef.current = JSON.stringify(currentLeadsRef.current);
+        setSyncEnabled(true);
+        setMessage(`已核對本機與雲端 ${data.leads.length} 筆完全一致，已自動恢復同步。`);
+      } else {
+        setSyncEnabled(false);
+        setMessage(`本機 ${currentLeadsRef.current.length} 筆、雲端 ${data.leads.length} 筆內容不同，請確認資料來源後再同步。`);
+      }
       return data;
     } catch (err) {
       setMessage(`讀取雲端失敗：${err.message}`);
