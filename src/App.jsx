@@ -1034,11 +1034,14 @@ export default function App(){
     const rejectedStatuses=["無需求","內部無需求但可能有實習機會","未成交"];
     const replied=normal.filter(l=>repliedStatuses.includes(l.status)).length;
     const activeOpportunity=normal.filter(l=>(l.opportunityLevel || getLeadQuality(l)).startsWith("A")).length;
+    // 依實際 CRM 洽談狀態統計，不使用舊版 A 級潛力評分。
+    const discussionStatuses=["LINE 洽談中","需求確認中","已約討論","洽談中","已報價","談合約","進行中","成交"];
+    const inDiscussion=normal.filter(l=>discussionStatuses.includes(l.status)).length;
     const rejected=normal.filter(l=>rejectedStatuses.includes(l.status)).length;
     const quoted=normal.filter(l=>["已報價","報價後停滯","洽談中","談合約","進行中","成交"].includes(l.status)).length;
     const projected=normal.reduce((s,l)=>s+toNumber(l.estimatedAmount),0);
     const actual=normal.reduce((s,l)=>s+toNumber(l.receivedAmount),0);
-    return {total:countedLeads.length,unsentCount,estimatedCount,sentCount,actualFollowUpCount,contacted,replied,activeOpportunity,rejected,quoted,projected,actual};
+    return {total:countedLeads.length,unsentCount,estimatedCount,sentCount,actualFollowUpCount,contacted,replied,activeOpportunity,inDiscussion,rejected,quoted,projected,actual};
   },[leads]);
 
   const statDetailData=useMemo(()=>{
@@ -1065,9 +1068,14 @@ export default function App(){
         items:normal.filter(l=>["對方已回覆","願意交流","後續回信中","已加 LINE","LINE 洽談中","內部討論中","待主管評估","留存參考","需求確認中","已約討論","洽談中","已報價","報價後停滯","談合約","進行中","成交","無需求","內部無需求但可能有實習機會","未成交"].includes(l.status))
       },
       active:{
-        title:"真商機",
-        description:"只統計 A｜真商機：有具體痛點，而且已有明確下一步、功能確認、報價、會議、預算/時程或合約推進。留存參考、轉知、問問看都不算。",
+        title:"A 級潛在名單",
+        description:"依既有 A 級標記統計，主要是過去對開發潛力的評估，不代表客戶回覆、有明確需求或已進入合作洽談。",
         items:normal.filter(l=>(l.opportunityLevel || getLeadQuality(l)).startsWith("A"))
+      },
+      discussion:{
+        title:"進入洽談階段",
+        description:"只依 CRM 目前狀態為 LINE 洽談中、需求確認中、已約討論、洽談中、已報價、談合約、進行中或成交的名單統計；不代表已成交或確認預算。",
+        items:normal.filter(l=>["LINE 洽談中","需求確認中","已約討論","洽談中","已報價","談合約","進行中","成交"].includes(l.status))
       },
       rejected:{
         title:"無需求 / 未成交",
@@ -1616,7 +1624,7 @@ export default function App(){
 
     <CrmCloud leads={leads} setLeads={setLeads}/>
 
-    <section className="mt-8 grid gap-4 md:grid-cols-4 xl:grid-cols-5"><Stat icon={ClipboardList} label="客戶名單總數" value={stats.total}/><Stat icon={Clock3} label="未寄" value={stats.unsentCount} active={activeStatKey==="unsent"} onClick={()=>setActiveStatKey(activeStatKey==="unsent"?"":"unsent")}/><Stat icon={Mail} label="已寄" value={stats.sentCount} active={activeStatKey==="sent"} onClick={()=>setActiveStatKey(activeStatKey==="sent"?"":"sent")}/><Stat icon={Mail} label="已補追" value={stats.actualFollowUpCount} active={activeStatKey==="actualFollowUp"} onClick={()=>setActiveStatKey(activeStatKey==="actualFollowUp"?"":"actualFollowUp")}/><Stat icon={CheckCircle2} label="有回覆" value={stats.replied} active={activeStatKey==="replied"} onClick={()=>setActiveStatKey(activeStatKey==="replied"?"":"replied")}/><Stat icon={Clock3} label="真商機" value={stats.activeOpportunity} active={activeStatKey==="active"} onClick={()=>setActiveStatKey(activeStatKey==="active"?"":"active")}/><Stat icon={AlertCircle} label="無需求/未成交" value={stats.rejected} active={activeStatKey==="rejected"} onClick={()=>setActiveStatKey(activeStatKey==="rejected"?"":"rejected")}/><Stat icon={DollarSign} label="有預計收益案源" value={stats.estimatedCount} active={activeStatKey==="estimated"} onClick={()=>setActiveStatKey(activeStatKey==="estimated"?"":"estimated")}/><Stat icon={DollarSign} label="預計收益總累積" value={money(stats.projected)}/><Stat icon={DollarSign} label="目前總收益" value={money(stats.actual)}/></section>
+    <section className="mt-8 grid gap-4 md:grid-cols-4 xl:grid-cols-5"><Stat icon={ClipboardList} label="客戶名單總數" value={stats.total}/><Stat icon={Clock3} label="未寄" value={stats.unsentCount} active={activeStatKey==="unsent"} onClick={()=>setActiveStatKey(activeStatKey==="unsent"?"":"unsent")}/><Stat icon={Mail} label="已寄" value={stats.sentCount} active={activeStatKey==="sent"} onClick={()=>setActiveStatKey(activeStatKey==="sent"?"":"sent")}/><Stat icon={Mail} label="已補追" value={stats.actualFollowUpCount} active={activeStatKey==="actualFollowUp"} onClick={()=>setActiveStatKey(activeStatKey==="actualFollowUp"?"":"actualFollowUp")}/><Stat icon={CheckCircle2} label="有回覆" value={stats.replied} active={activeStatKey==="replied"} onClick={()=>setActiveStatKey(activeStatKey==="replied"?"":"replied")}/><Stat icon={Clock3} label="A 級潛在名單" value={stats.activeOpportunity} active={activeStatKey==="active"} onClick={()=>setActiveStatKey(activeStatKey==="active"?"":"active")}/><Stat icon={Clock3} label="進入洽談階段" value={stats.inDiscussion} active={activeStatKey==="discussion"} onClick={()=>setActiveStatKey(activeStatKey==="discussion"?"":"discussion")}/><Stat icon={AlertCircle} label="無需求/未成交" value={stats.rejected} active={activeStatKey==="rejected"} onClick={()=>setActiveStatKey(activeStatKey==="rejected"?"":"rejected")}/><Stat icon={DollarSign} label="有預計收益案源" value={stats.estimatedCount} active={activeStatKey==="estimated"} onClick={()=>setActiveStatKey(activeStatKey==="estimated"?"":"estimated")}/><Stat icon={DollarSign} label="預計收益總累積" value={money(stats.projected)}/><Stat icon={DollarSign} label="目前總收益" value={money(stats.actual)}/></section>
 
     {activeStatDetail&&<section className="mt-4 overflow-hidden rounded-3xl border border-blue-200 bg-white shadow-sm"><div className="flex flex-col gap-3 border-b border-blue-100 bg-blue-50 px-5 py-4 md:flex-row md:items-start md:justify-between"><div><p className="font-bold text-slate-950">{activeStatDetail.title}名單（{activeStatDetail.items.length} 筆）</p><p className="mt-1 text-sm leading-6 text-slate-500">{activeStatDetail.description}</p></div><button onClick={()=>setActiveStatKey("")} className="w-fit rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">關閉</button></div><div className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-3">{activeStatDetail.items.length===0?<div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-400 md:col-span-2 xl:col-span-3"><AlertCircle className="mx-auto mb-3 h-8 w-8"/><p>目前沒有符合這個統計的名單。</p></div>:activeStatDetail.items.map(item=><div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold text-slate-950">{item.name||"未命名單位"}</p><p className="mt-1 text-xs text-slate-500">{item.contact||"尚未填窗口"}・{item.type||"其他"}・{item.status}</p></div><button onClick={()=>setEditing(item)} className="shrink-0 rounded-xl border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50"><Pencil className="h-4 w-4"/></button></div><div className="mt-3 flex flex-wrap gap-2"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${qualityBadgeClass(getLeadQuality(item))}`}>{getLeadQuality(item)}</span><span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">{getFocusFit(item)}</span></div><div className="mt-3 space-y-1 text-sm leading-6 text-slate-600"><p>預計收益：<span className="font-semibold text-blue-700">{money(item.estimatedAmount)}</span></p><p>方案：{item.projectPlan||"尚未設定方案"}</p><p>寄出日：{item.sentDate||"尚未寄出"}</p><p>追蹤日：{item.followUpDate||"無追蹤日"}</p><p>補追日：{item.actualFollowUpDate||"尚未補追"}</p><p className="line-clamp-2">下一步：{item.nextAction||"尚未設定下一步"}</p></div></div>)}</div></section>}
 
